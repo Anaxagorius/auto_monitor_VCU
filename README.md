@@ -2,7 +2,9 @@
 
 > **Platform:** Microsoft Power Automate (Cloud Flow) · **Tenant:** Microsoft 365 · **Audience:** IT / Security / Compliance
 
-Automatically monitors external IT and cybersecurity bulletin sources, detects new content, summarises it using Copilot / AI Builder, and saves structured Markdown reports directly inside Microsoft Teams — with no manual link-checking and no AI output leaving the M365 tenant.
+Automatically collects external IT and cybersecurity bulletin sources, creates dated intake files, and supports a human-in-the-loop Copilot summarization step — keeping all content inside the M365 tenant with no premium Power Automate connectors required.
+
+> **Architecture note (Doc2 — license-safe revision):** The original design used the Power Automate HTTP connector and AI Builder "Create text with GPT." Both require premium licensing unavailable in a standard M365 + Copilot environment. This revised design uses **standard connectors only** for automation and relies on **manual Copilot prompting** (inside Word or OneDrive) for summarization and classification. Automation still handles ~70–80% of the effort — scheduling, source tracking, intake file creation, and audit logging.
 
 ---
 
@@ -13,72 +15,78 @@ Automatically monitors external IT and cybersecurity bulletin sources, detects n
 3. [Repository Structure](#repository-structure)
 4. [Prerequisites](#prerequisites)
 5. [Setup — Phase 1: SharePoint](#setup--phase-1-sharepoint)
-6. [Setup — Phase 2: Build the Daily Flow](#setup--phase-2-build-the-daily-flow)
-   - [Step 1 — Create the Scheduled Flow](#step-1--create-the-scheduled-flow)
-   - [Step 2 — Retrieve Sources from SharePoint](#step-2--retrieve-sources-from-sharepoint)
-   - [Step 3 — Retrieve Source Content (HTTP)](#step-3--retrieve-source-content-http)
-   - [Step 4 — Change Detection](#step-4--change-detection)
-   - [Step 5 — AI Summarization](#step-5--ai-summarization)
-   - [Step 6 — Classification Logic](#step-6--classification-logic)
-   - [Step 7 — Generate the Markdown Bulletin](#step-7--generate-the-markdown-bulletin)
-   - [Step 8 — Teams Notification (Controlled)](#step-8--teams-notification-controlled)
-7. [Setup — Phase 3: Build the Weekly Flow](#setup--phase-3-build-the-weekly-flow)
-8. [Monitoring & Troubleshooting](#monitoring--troubleshooting)
-9. [Adding or Removing Sources](#adding-or-removing-sources)
-10. [Governance & Compliance](#governance--compliance)
-11. [File Reference](#file-reference)
+6. [Setup — Phase 2: Build the Daily Collector Flow](#setup--phase-2-build-the-daily-collector-flow)
+7. [Setup — Phase 2B: Manual Copilot Review](#setup--phase-2b-manual-copilot-review-it-staff)
+8. [Setup — Phase 3: Build the Weekly Flow](#setup--phase-3-build-the-weekly-flow)
+9. [Monitoring & Troubleshooting](#monitoring--troubleshooting)
+10. [Adding or Removing Sources](#adding-or-removing-sources)
+11. [Governance & Compliance](#governance--compliance)
+12. [File Reference](#file-reference)
 
 ---
 
 ## Overview
 
-This solution eliminates manual bulletin monitoring for a Nova Scotia credit union IT and security team. Two scheduled Power Automate flows — one daily, one weekly — pull content from approved external sources, detect changes using a content hash, summarise new content using the approved AI prompt, classify the output, and file a Markdown report in Microsoft Teams. A Teams channel alert is only sent when the classification is **Attention Required**, keeping notifications meaningful and infrequent.
+This solution reduces manual bulletin monitoring effort for a Nova Scotia credit union IT and security team. Two scheduled Power Automate flows — one daily, one weekly — track approved external sources, create dated intake files, and maintain a complete audit log. A licensed IT staff member then opens each intake file, visits the source URL, and uses Copilot (inside Word or OneDrive) to summarise the content and apply a classification. The final bulletin is saved to Microsoft Teams. A Teams channel alert is posted manually only when the classification is **Attention Required**.
 
 **What you gain:**
 
-- Consistent daily and weekly bulletins with zero manual effort
-- Change-detection that prevents duplicate or stale reports
-- Controlled, auditable AI output (same prompt every time)
-- A clear escalation path with no AI tool making decisions
+- Consistent daily and weekly source coverage with no missed days
+- Scheduled reminders and intake files eliminate manual tracking
+- Controlled, auditable Copilot output (same approved prompt every time)
+- Human validation at every step — no AI tool making final decisions
 - A complete audit trail inside M365 (SharePoint version history + Power Automate run history)
+- Zero premium connector dependencies — works on standard M365 + Copilot licences
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                  Power Automate (Cloud Flow)                │
-│                                                             │
-│  Scheduled Trigger (Daily / Weekly)                         │
-│       │                                                     │
-│       ▼                                                     │
-│  Get items → Bulletin Sources (SharePoint List)             │
-│       │                                                     │
-│       ▼  [Apply to each source]                             │
-│  HTTP GET source URL  ──► Member source?                    │
-│       │                        │ Yes → Ingest email OR      │
-│       │                        │       flag Manual Review   │
-│       ▼                        │                            │
-│  Generate content hash         │                            │
-│       │                        │                            │
-│       ▼                        │                            │
-│  Hash changed?                 │                            │
-│   No  → Log "no change"        │                            │
-│   Yes → AI Builder summarize ◄─┘                            │
-│              │                                              │
-│              ▼                                              │
-│  Classify: Attention Required / Awareness Only              │
-│              │                                              │
-│              ▼                                              │
-│  Create Markdown file → SharePoint (Teams > IT > Bulletins) │
-│              │                                              │
-│              ▼  [Attention Required only]                   │
-│  Post Teams message (link to file, one sentence)            │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│     PHASE 1 — Power Automate (Standard Connectors Only)           │
+│                                                                   │
+│  Scheduled Trigger (Daily / Weekly)                               │
+│       │                                                           │
+│       ▼                                                           │
+│  Get items → Bulletin Sources (SharePoint List)                   │
+│       │                                                           │
+│       ▼  [Apply to each source]                                   │
+│  Member source?                                                   │
+│   Yes → Ingest email from shared mailbox OR flag Manual Review    │
+│   No  →                                                           │
+│       ▼                                                           │
+│  Create intake file → SharePoint                                  │
+│  (Teams > IT > Bulletins > Intake /                               │
+│   YYYY-MM-DD – Source Name – Raw.txt)                             │
+│       │                                                           │
+│       ▼                                                           │
+│  Log entry → Bulletin Run Log (SharePoint List)                   │
+└───────────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌───────────────────────────────────────────────────────────────────┐
+│             PHASE 2 — IT Staff (Manual + Copilot)                 │
+│                                                                   │
+│  Open intake file → visit source URL → copy relevant text         │
+│       │                                                           │
+│       ▼                                                           │
+│  Paste text into Word / OneDrive → ask Copilot to summarise       │
+│  (using approved prompt from prompts/summarization_prompt.md)     │
+│       │                                                           │
+│       ▼                                                           │
+│  Apply classification: Attention Required / Awareness Only        │
+│       │                                                           │
+│       ▼                                                           │
+│  Paste into bulletin template → save to                           │
+│  Teams > IT > Bulletins > Daily Monitoring                        │
+│       │                                                           │
+│       ▼  [Attention Required only]                                │
+│  Post Teams message (link to bulletin file, one sentence)         │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-Everything stays inside the M365 tenant. No data is sent to third-party services.
+Everything stays inside the M365 tenant. No data is sent to third-party services. No premium Power Automate connectors are used.
 
 ---
 
@@ -88,6 +96,7 @@ Everything stays inside the M365 tenant. No data is sent to third-party services
 .
 ├── README.md                        # This file — setup & instructions
 ├── Document.pdf                     # Original specification document
+├── Doc2.pdf                         # License-safe architecture correction (supersedes original where noted)
 ├── config/
 │   └── bulletin_sources.json        # Seed data for the Bulletin Sources SharePoint list
 ├── docs/
@@ -95,7 +104,7 @@ Everything stays inside the M365 tenant. No data is sent to third-party services
 ├── flow/
 │   └── flow_overview.md             # Detailed Power Automate build reference
 ├── prompts/
-│   └── summarization_prompt.md      # AI Builder system prompt (use verbatim)
+│   └── summarization_prompt.md      # Approved Copilot prompt (use verbatim in manual review step)
 └── templates/
     └── bulletin_template.md         # Markdown output template for bulletin files
 ```
@@ -108,13 +117,15 @@ Before you begin, confirm the following are available in your M365 tenant:
 
 | Requirement | Details |
 |-------------|---------|
-| **Microsoft 365 licence** | Power Automate Standard or Premium per-user plan (Premium required for HTTP connector) |
-| **Power Automate access** | Make sure the account building the flow is a licensed Power Automate user |
-| **AI Builder / Copilot** | AI Builder credits or a Copilot Studio licence for the "Create text with GPT" action |
+| **Microsoft 365 licence** | Business Standard, E3, or E5 (Power Automate standard connectors are included) |
+| **Power Automate access** | Ensure the account building the flow is a licensed Power Automate user — standard plan only; **no Premium plan required** |
+| **Microsoft 365 Copilot** | Required for the manual summarization step (Phase 2); available in Word, OneDrive, and Teams |
 | **SharePoint site** | An existing Teams IT SharePoint site with list-creation permissions |
 | **Teams channel** | `Teams > IT` channel where bulletins will be stored and notifications posted |
 | **Shared mailbox** | A monitored shared mailbox to receive FS-ISAC (member-only) digest emails |
-| **Flow Owner account** | A service or user account that will own both flows and has permissions to SharePoint, Teams, and AI Builder |
+| **Flow Owner account** | A service or user account that will own both flows and has permissions to SharePoint and Teams |
+
+> **Connectors not required (and not used):** HTTP connector, AI Builder, Azure OpenAI, Copilot Studio, custom connectors, Dataverse. These are all premium and have been eliminated from the design.
 
 ---
 
@@ -166,21 +177,22 @@ The flow writes one entry per source per run, giving you a complete audit trail.
 In the Teams IT SharePoint document library (the one backing the **Files** tab in Teams):
 
 1. Create folder: `Bulletins`
-2. Inside `Bulletins`, create two sub-folders:
+2. Inside `Bulletins`, create three sub-folders:
+   - `Intake` *(raw intake files created by the flow — reviewed by IT staff)*
    - `Daily Monitoring`
    - `Weekly Monitoring`
 
 ---
 
-## Setup — Phase 2: Build the Daily Flow
+## Setup — Phase 2: Build the Daily Collector Flow
 
-Open [Power Automate](https://make.powerautomate.com) and follow these steps.
+Open [Power Automate](https://make.powerautomate.com) and follow these steps. All actions in this phase use **standard connectors only** — no premium licensing required.
 
 ### Step 1 — Create the Scheduled Flow
 
 1. Select **Create → Scheduled cloud flow**.
 2. Set the following:
-   - **Name:** `Daily – External IT & Cyber Bulletin Monitor`
+   - **Name:** `Daily – External IT & Cyber Bulletin Collector`
    - **Starting:** Today's date
    - **Repeat every:** `1 Day`
    - **At:** `07:00 AM` Atlantic Standard Time (11:00 UTC / 12:00 UTC during ADT)
@@ -196,17 +208,12 @@ Add the first action inside the flow:
    - **Filter Query:** `Enabled eq 1`
    - **Top Count:** `100` (increase if you add many sources)
 
-2. Add action: **Initialize variable**
-   - **Name:** `Classification`
-   - **Type:** String
-   - **Value:** *(leave blank)*
-
-3. Add action: **Apply to each**
+2. Add action: **Apply to each**
    - **Select an output from previous steps:** `value` (output of Get items)
 
 All remaining steps in this section are built **inside** the Apply to each loop.
 
-### Step 3 — Retrieve Source Content (HTTP)
+### Step 3 — Handle Source Type and Create Intake File
 
 Inside the loop, add a **Condition** to check the source type:
 
@@ -214,11 +221,30 @@ Inside the loop, add a **Condition** to check the source type:
 
 **If Yes (Public or Signal source):**
 
-1. Add action: **HTTP**
-   - **Method:** `GET`
-   - **URI:** `@{items('Apply_to_each')?['Source_x0020_URL']}`
-   - **Headers:** *(none required for public sources)*
-   - Rename this action to `HTTP_GetSource` for easier referencing later.
+1. Add action: **Create file** (SharePoint)
+   - **Site Address:** Teams IT SharePoint site
+   - **Folder Path:** `/Bulletins/Intake`
+   - **File Name:**
+     ```
+     @{formatDateTime(utcNow(), 'yyyy-MM-dd')} – @{items('Apply_to_each')?['Source_x0020_Name']} – Raw.txt
+     ```
+   - **File Content:**
+     ```
+     Source: @{items('Apply_to_each')?['Source_x0020_Name']}
+     URL: @{items('Apply_to_each')?['Source_x0020_URL']}
+     Date: @{formatDateTime(utcNow(), 'yyyy-MM-dd')}
+
+     ACTION REQUIRED: Open the URL above, copy relevant content, then use Copilot to summarise.
+     Use the approved prompt in prompts/summarization_prompt.md.
+     Save the final bulletin to Bulletins/Daily Monitoring.
+     ```
+   - Rename this action to `CreateIntakeFile`.
+
+2. Add action: **Create item** (SharePoint — Bulletin Run Log list)
+   - Source Name: `@{items('Apply_to_each')?['Source_x0020_Name']}`
+   - Run Date: `@{utcNow()}`
+   - Status: `Intake Created`
+   - Notes: `Intake file created. Awaiting manual Copilot review.`
 
 **If No (Member source — e.g., FS-ISAC):**
 
@@ -230,171 +256,79 @@ Choose one of the following approaches:
      - **Folder:** Inbox
      - **Filter:** `From` contains `fsisac.com`
      - **Top:** `5`
-  2. Use the email body as the content for summarization.
+  2. Add action: **Create file** (SharePoint) to save the email body as the intake file content (same folder path and naming convention as above).
 
 - **Manual flag approach:**
-  1. Add action: **Compose** with value: `"Manual review required — FS-ISAC content must be reviewed directly."`
+  1. Add action: **Create file** (SharePoint) with content: `"Manual review required — FS-ISAC content must be reviewed directly at https://www.fsisac.com."`
   2. Add action: **Create item** (SharePoint) to write a `Manual Review` status to the Run Log list.
-  3. Add a **Terminate** action (set to `Succeeded`) to skip the rest of the loop iteration for this source.
 
-### Step 4 — Change Detection
+---
 
-After the HTTP action (inside the "Yes" branch of the Source Type condition):
+## Setup — Phase 2B: Manual Copilot Review (IT Staff)
 
-1. Add action: **Compose** — encode the response body for comparison:
-   ```
-   @{base64(body('HTTP_GetSource'))}
-   ```
-   Rename this action to `Compose_Hash`.
+After the flow runs each morning, an IT staff member performs the following steps for each intake file created.
 
-2. Add action: **Condition** — check whether content has changed:
-   - **Left side:** `@{outputs('Compose_Hash')}`
-   - **Operator:** `is not equal to`
-   - **Right side:** `@{items('Apply_to_each')?['Last_x0020_Reviewed_x0020_Hash']}`
+> This step uses **Microsoft 365 Copilot** inside Word or OneDrive — no additional licensing beyond your M365 Copilot subscription is required.
 
-**If No (content unchanged):**
+### Step A — Open the Intake File
 
-1. Add action: **Create item** (SharePoint — Bulletin Run Log list)
-   - Source Name: `@{items('Apply_to_each')?['Source_x0020_Name']}`
-   - Run Date: `@{utcNow()}`
-   - Status: `No Change`
-   - Notes: `No new or updated content identified.`
-2. End this iteration (no further actions needed; the loop moves to the next source).
+1. Navigate to `Teams > IT > Files > Bulletins > Intake`.
+2. Open today's intake file (e.g., `2025-01-15 – Canadian Centre for Cyber Security – Raw.txt`).
+3. Open the source URL listed in the file in a browser tab.
 
-**If Yes (content changed):** Continue to Step 5.
+### Step B — Copy and Summarise with Copilot
 
-### Step 5 — AI Summarization
-
-Inside the "Yes (changed)" branch:
-
-1. Add action: **Create text with GPT** (AI Builder)  
-   *(Search for "AI Builder" in the action picker; the action may also appear as "Create text with GPT using a prompt".)*
-
-2. **System / Instruction Prompt** — paste this **verbatim** (do not modify):
+1. Copy the relevant content from the source URL.
+2. Open a new Word document or OneDrive file.
+3. Paste the copied content.
+4. Select all pasted text, then use Copilot and paste the **approved prompt** verbatim (from `prompts/summarization_prompt.md`):
 
    ```
-   Summarize the following content for a Canadian credit union IT and security audience.
-
-   Requirements:
-   - Professional tone
-   - No emojis or marketing language
-   - Focus on operational relevance
-   - Indicate whether immediate action is required
-   - Note potential branch impact
-   - Use short paragraphs or bullet points
-   - Do not speculate
-
-   End the summary with:
-   "Source: [URL]"
+   Summarize this content for a Canadian credit union IT audience.
+   Focus on operational relevance and whether action is required.
+   No emojis. Professional tone.
    ```
 
-3. **User Content:** `@{body('HTTP_GetSource')}` (truncate to ~3,000 characters if the source page is very large to stay within AI Builder token limits).
+5. Copilot returns a structured summary. Review it for accuracy — do **not** accept it without reading it.
 
-4. Rename this action to `AIBuilder_Summarize`.
+### Step C — Classify and Create the Final Bulletin
 
-> The full prompt is also stored in `prompts/summarization_prompt.md`. Do not modify the prompt between runs — consistency is required for audit defensibility.
+1. Apply classification based on the summary content:
+   - **Attention Required** — if the summary indicates immediate action, active exploitation, service disruption, or a critical vulnerability
+   - **Awareness Only** — all other cases
 
-### Step 6 — Classification Logic
+2. Open `templates/bulletin_template.md` and fill in the placeholders.
 
-After the AI Builder action:
+3. Save the completed bulletin to `Teams > IT > Bulletins > Daily Monitoring` using the file name format:
+   ```
+   YYYY-MM-DD – Daily IT & Cyber Watch.md
+   ```
 
-1. Add action: **Set variable**
-   - **Name:** `Classification`
-   - **Value:** `Awareness Only`
-
-2. Add action: **Condition** — check the summary for high-priority phrases:
-   - Build four OR conditions checking if `@{outputs('AIBuilder_Summarize')?['text']}` **contains** any of:
-     - `Immediate action required`
-     - `Active exploitation`
-     - `Service disruption`
-     - `Critical vulnerability`
-
-3. **If Yes:** Add action: **Set variable** — set `Classification` to `Attention Required`.
-
-4. **If No:** No action needed (the variable is already `Awareness Only`).
-
-### Step 7 — Generate the Markdown Bulletin
-
-After the classification step:
-
-1. Add action: **Create file** (SharePoint)
-   - **Site Address:** Teams IT SharePoint site
-   - **Folder Path:** `/Bulletins/Daily Monitoring`
-   - **File Name:**
-     ```
-     @{formatDateTime(utcNow(), 'yyyy-MM-dd')} – @{items('Apply_to_each')?['Source_x0020_Name']} – Automated IT & Cyber Watch.md
-     ```
-   - **File Content:** Copy the template below (based on `templates/bulletin_template.md`), replacing placeholders with dynamic expressions:
-
-     ```markdown
-     # Daily IT & Cyber Watch
-
-     **Date:** @{formatDateTime(utcNow(), 'yyyy-MM-dd')}
-     **Source:** @{items('Apply_to_each')?['Source_x0020_Name']}
-     **URL:** @{items('Apply_to_each')?['Source_x0020_URL']}
-     **Classification:** @{variables('Classification')}
-
-     ---
-
-     @{outputs('AIBuilder_Summarize')?['text']}
-
-     ---
-
-     > This summary was generated automatically.
-     > Official guidance remains with the issuing authority.
-     > Final incident classification, escalation, and regulatory reporting decisions remain the responsibility of the Credit Union.
-     ```
-
-2. After the file is created, update the hash in the SharePoint list:
-   - Add action: **Update item** (SharePoint — Bulletin Sources list)
-     - **Id:** `@{items('Apply_to_each')?['ID']}`
-     - **Last Reviewed Hash:** `@{outputs('Compose_Hash')}`
-
-3. Add action: **Create item** (SharePoint — Bulletin Run Log list)
-   - Source Name: `@{items('Apply_to_each')?['Source_x0020_Name']}`
-   - Run Date: `@{utcNow()}`
-   - Status: `Changed`
-   - Notes: `@{variables('Classification')}`
-
-### Step 8 — Teams Notification (Controlled)
-
-After the file creation, add a **Condition**:
-
-- **Condition:** `@{variables('Classification')}` **is equal to** `Attention Required`
-
-**If Yes:**
-
-1. Add action: **Post message in a chat or channel** (Microsoft Teams)
-   - **Post as:** Flow bot
-   - **Post in:** Channel
-   - **Team:** IT
-   - **Channel:** General (or a dedicated `#bulletins` channel)
-   - **Message:**
-     ```
-     ⚠️ Attention Required – new bulletin posted for @{items('Apply_to_each')?['Source_x0020_Name']}.
-     Review the full bulletin: [paste SharePoint file link or use the file URL from the Create file action output]
-     ```
-   - **Do not** paste the AI summary into the Teams message body.
-
-**If No (Awareness Only):** No Teams message is sent. The bulletin file is available in SharePoint for daily review.
+4. If classification is **Attention Required**, post a message in the `Teams > IT` channel:
+   ```
+   ⚠️ Attention Required – new bulletin posted for [Source Name].
+   Review: [link to SharePoint bulletin file]
+   ```
+   Do **not** paste the full summary into the Teams message.
 
 ---
 
 ## Setup — Phase 3: Build the Weekly Flow
 
-1. In Power Automate, open the daily flow.
+1. In Power Automate, open the daily collector flow.
 2. Select the **⋯ menu → Save As**.
-3. Name the copy: `Weekly – External IT & Cyber Bulletin Monitor`
+3. Name the copy: `Weekly – External IT & Cyber Bulletin Collector`
 4. Make the following changes:
    - **Recurrence:** Change frequency to `Week`, interval `1`.
-   - **Folder path (Step 7):** Change to `/Bulletins/Weekly Monitoring`
-   - **AI Builder prompt:** Append the following sentence to the instruction prompt:
-     ```
-     Focus on trends and recurring risks rather than individual daily alerts.
-     ```
+   - **Intake folder path (Step 3):** Change to `/Bulletins/Intake` with a weekly prefix in the file name (e.g., prepend `Weekly – `).
 5. Save and turn on the flow.
 
-Everything else (source list, change detection, classification, notification logic) is identical.
+For the manual Copilot review step (Phase 2B), use the same process but append the following to your Copilot prompt:
+```
+Focus on trends and recurring risks rather than individual daily alerts.
+```
+
+Save weekly bulletins to `Teams > IT > Bulletins > Weekly Monitoring`.
 
 ---
 
@@ -403,7 +337,7 @@ Everything else (source list, change detection, classification, notification log
 ### Normal Operations
 
 - Check **Power Automate Run History** daily for the first two weeks after go-live.
-- Go to **My Flows → Daily – External IT & Cyber Bulletin Monitor → Run history**.
+- Go to **My Flows → Daily – External IT & Cyber Bulletin Collector → Run history**.
 - Each run should complete with status `Succeeded`. Review any `Failed` runs immediately.
 
 ### Setting Up Failure Alerts
@@ -416,18 +350,18 @@ Everything else (source list, change detection, classification, notification log
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| HTTP action fails | Source URL changed or site is down | Update the URL in the Bulletin Sources list; verify site availability |
-| AI Builder action fails | Quota exceeded or input too large | Check AI Builder credit balance; truncate input content |
-| SharePoint action fails | Permissions or column name mismatch | Verify the flow owner account has Contribute access to the SharePoint list and document library |
+| SharePoint "Create file" action fails | Permissions, column name mismatch, or folder path not found | Verify the flow owner account has Contribute access; confirm the `Bulletins/Intake` folder exists |
+| "Get emails" action fails (Member sources) | Shared mailbox permissions changed or filter too narrow | Check shared mailbox access; adjust the sender filter |
+| SharePoint "Get items" fails | List name changed or site URL moved | Update the action's Site Address and List Name fields |
 | Flow times out | Too many sources running serially | Split large source lists into separate flows |
 
 ### Manual Fallback
 
 If the flow fails and cannot be restored the same day:
 
-1. Visit each enabled source URL directly.
-2. Copy relevant content into a new file using `templates/bulletin_template.md`.
-3. Save the file manually to `Teams > IT > Bulletins > Daily Monitoring`.
+1. Visit each enabled source URL directly (use `config/bulletin_sources.json` as the source list).
+2. Copy relevant content and use Copilot to summarise using the approved prompt.
+3. Fill in `templates/bulletin_template.md` and save manually to `Teams > IT > Bulletins > Daily Monitoring`.
 4. Log the manual run in the Bulletin Run Log SharePoint list.
 5. Notify the Flow Owner to restore automated operation within one business day.
 
@@ -462,10 +396,10 @@ All source management is done through the **Bulletin Sources** SharePoint list �
 
 ### Governance Statement
 
-> **Automated summaries are used for awareness only.**  
+> **Copilot-assisted summaries are used for awareness only.**  
 > Final incident classification, escalation, and regulatory reporting decisions remain the responsibility of the Credit Union.
 
-This statement appears in every generated bulletin. It must not be removed from the template.
+This statement appears in every bulletin. It must not be removed from the template. Human review of every Copilot output is required before any classification is applied.
 
 ### Roles
 
@@ -510,11 +444,12 @@ The full Standard Operating Procedure (including annual review checklist) is in 
 |------|---------|
 | `README.md` | This document — full setup instructions |
 | `Document.pdf` | Original specification document |
+| `Doc2.pdf` | License-safe architecture correction (supersedes original where noted) |
 | `config/bulletin_sources.json` | Seed data for the Bulletin Sources SharePoint list |
 | `docs/SOP.md` | Standard Operating Procedure, roles, escalation, audit |
 | `flow/flow_overview.md` | Condensed Power Automate build reference |
-| `prompts/summarization_prompt.md` | AI Builder system prompt and classification keyword table |
-| `templates/bulletin_template.md` | Markdown template used in the "Create file" action |
+| `prompts/summarization_prompt.md` | Approved Copilot prompt for manual summarization (use verbatim) |
+| `templates/bulletin_template.md` | Markdown template for completed bulletin files |
 
 ---
 
@@ -522,5 +457,5 @@ The full Standard Operating Procedure (including annual review checklist) is in 
 
 | Flow Name | Schedule | Output Folder |
 |-----------|----------|---------------|
-| Daily – External IT & Cyber Bulletin Monitor | Daily @ 07:00 AST | `Teams > IT > Bulletins > Daily Monitoring` |
-| Weekly – External IT & Cyber Bulletin Monitor | Weekly | `Teams > IT > Bulletins > Weekly Monitoring` |
+| Daily – External IT & Cyber Bulletin Collector | Daily @ 07:00 AST | `Teams > IT > Bulletins > Intake` (then manually to `Daily Monitoring`) |
+| Weekly – External IT & Cyber Bulletin Collector | Weekly | `Teams > IT > Bulletins > Intake` (then manually to `Weekly Monitoring`) |
