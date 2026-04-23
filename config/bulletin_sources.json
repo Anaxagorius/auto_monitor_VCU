@@ -1,0 +1,34 @@
+[
+  {
+    "SourceName": "Canadian Centre for Cyber Security",
+    "SourceURL": "https://www.cyber.gc.ca/en/cyber-security-alerts-advisories",
+    "SourceType": "Public",
+    "MonitoringFrequency": "Daily",
+    "Enabled": true,
+    "LastReviewedHash": ""
+  },
+  {
+    "SourceName": "OSFI Technology & Cyber Guidance",
+    "SourceURL": "https://www.osfi-bsif.gc.ca/en/guidance/guidance-library",
+    "SourceType": "Public",
+    "MonitoringFrequency": "Daily",
+    "Enabled": true,
+    "LastReviewedHash": ""
+  },
+  {
+    "SourceName": "FS-ISAC Incident Response",
+    "SourceURL": "https://www.fsisac.com/incident-response",
+    "SourceType": "Member",
+    "MonitoringFrequency": "Daily",
+    "Enabled": true,
+    "LastReviewedHash": ""
+  },
+  {
+    "SourceName": "Downdetector Canada",
+    "SourceURL": "https://downdetector.ca/",
+    "SourceType": "Signal",
+    "MonitoringFrequency": "Daily",
+    "Enabled": true,
+    "LastReviewedHash": ""
+  }
+]
