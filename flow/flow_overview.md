@@ -82,11 +82,21 @@ After the flow runs, IT staff open each intake file and:
 
 1. Visit the source URL listed in the file.
 2. Copy relevant content into Word or OneDrive.
-3. Ask Copilot using the approved prompt (from `prompts/summarization_prompt.md`):
+3. Ask Copilot using the **full approved prompt verbatim** (from `prompts/summarization_prompt.md`):
    ```
-   Summarize this content for a Canadian credit union IT audience.
-   Focus on operational relevance and whether action is required.
-   No emojis. Professional tone.
+   Summarize the following content for a Canadian credit union IT and security audience.
+
+   Requirements:
+   - Professional tone
+   - No emojis or marketing language
+   - Focus on operational relevance
+   - Indicate whether immediate action is required
+   - Note potential branch impact
+   - Use short paragraphs or bullet points
+   - Do not speculate
+
+   End the summary with:
+   "Source: [URL]"
    ```
 4. Review the Copilot output — do not accept without reading.
 5. Apply classification:

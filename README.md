@@ -281,12 +281,22 @@ After the flow runs each morning, an IT staff member performs the following step
 1. Copy the relevant content from the source URL.
 2. Open a new Word document or OneDrive file.
 3. Paste the copied content.
-4. Select all pasted text, then use Copilot and paste the **approved prompt** verbatim (from `prompts/summarization_prompt.md`):
+4. Select all pasted text, then use Copilot and paste the **full approved prompt verbatim** (from `prompts/summarization_prompt.md`):
 
    ```
-   Summarize this content for a Canadian credit union IT audience.
-   Focus on operational relevance and whether action is required.
-   No emojis. Professional tone.
+   Summarize the following content for a Canadian credit union IT and security audience.
+
+   Requirements:
+   - Professional tone
+   - No emojis or marketing language
+   - Focus on operational relevance
+   - Indicate whether immediate action is required
+   - Note potential branch impact
+   - Use short paragraphs or bullet points
+   - Do not speculate
+
+   End the summary with:
+   "Source: [URL]"
    ```
 
 5. Copilot returns a structured summary. Review it for accuracy — do **not** accept it without reading it.
