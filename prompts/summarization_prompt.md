@@ -1,10 +1,12 @@
-# AI Summarization Prompt
+# Copilot Summarization Prompt
 
-Use this prompt verbatim in the **"Create text with GPT"** (or Copilot text generation) action inside Power Automate. Do not modify the system/instruction prompt between runs — consistency is required for audit defensibility.
+Use this prompt verbatim in the **manual Copilot review step** (Phase 2B). Open the source content in Word or OneDrive, select the text, and paste this prompt into Copilot. Do not modify the prompt between uses — consistency is required for audit defensibility.
+
+> **Note:** This prompt is for manual use with Microsoft 365 Copilot (inside Word, OneDrive, or Teams). It is not configured inside Power Automate. The automated flow creates intake files only; summarization is a human-in-the-loop step.
 
 ---
 
-## System / Instruction Prompt
+## Copilot Prompt (Use Verbatim)
 
 ```
 Summarize the following content for a Canadian credit union IT and security audience.
@@ -24,9 +26,19 @@ End the summary with:
 
 ---
 
+## Weekly Review Variation
+
+When performing the weekly Copilot review, append the following sentence to the prompt above:
+
+```
+Focus on trends and recurring risks rather than individual daily alerts.
+```
+
+---
+
 ## User Content (Dynamic)
 
-Paste or map the extracted page text here. Truncate to the AI Builder token limit if needed.
+Paste or copy the extracted page text before submitting the prompt to Copilot.
 
 ```
 {{Extracted Page Text}}
@@ -36,7 +48,7 @@ Paste or map the extracted page text here. Truncate to the AI Builder token limi
 
 ## Classification Keywords
 
-After summarization, apply a condition step that scans the output for the following phrases to determine classification:
+After reviewing the Copilot summary, apply classification based on the presence of any of the following phrases:
 
 | Phrase | Classification |
 |--------|----------------|
